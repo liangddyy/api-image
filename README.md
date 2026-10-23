@@ -38,16 +38,42 @@ git clone <repo-url> "$env:CODEX_HOME\skills\api-image"
 
 默认情况下，这个 Skill 会读取你 Codex 根目录里的配置：
 
-- `auth.json`
 - `config.toml`
+- `auth.json`（可选）
 
-它需要能从里面找到：
+根目录优先使用 `--codex-home`，其次是环境变量 `CODEX_HOME`，否则使用 `~/.codex`。脚本从 `config.toml` 的 `model_provider` 选择 Provider，并读取对应的 `base_url`。
 
-- API Key
-- 当前 Provider
-- Provider 的 `base_url`
+凭据按以下顺序选择：
+
+1. 本次显式指定的 `--api-key-env` 或 `--api-key`。
+2. 当前 Provider 的 `env_key` 指向的环境变量。
+3. 当前 Provider 的 `experimental_bearer_token`。
+4. `auth.json` 中的 `OPENAI_API_KEY`。
+5. 环境变量 `OPENAI_API_KEY`。
+
+因此，没有 `auth.json` 也可以正常使用。例如，Codex 已经在当前 Provider 下配置了 `experimental_bearer_token`，就可以直接生图，无需再复制凭据。新配置更推荐使用 `env_key`。
+
+如果显式选择的环境变量为空或不存在，脚本会报错，不会偷偷换用其他凭据。脚本不读取 ChatGPT OAuth 登录令牌或系统凭据库，也不合并项目级或 profile 配置；仅有 Codex 登录状态并不代表有图片 API 权限。
 
 这个仓库不会、也不应该保存你的 API Key。
+
+## 配置自检
+
+需要 Python 3.11 或更高版本。常规请求仅依赖 Python 标准库；安装 Pillow 可增强输入图片检查。
+
+可以先运行不联网的自检，无需提供提示词：
+
+```powershell
+python "<skill-dir>\scripts\generate_image.py" --check-config
+```
+
+成功时显示配置目录和凭据来源，不打印密钥，不发出生图请求。自检只确认本地配置可读取；接口、模型和账户权限仍需实际请求验证。
+
+开发时运行回归测试（使用临时配置和本机模拟接口，不访问真实 Provider）：
+
+```powershell
+python -B -m unittest discover -s tests -v
+```
 
 ## 怎么用
 

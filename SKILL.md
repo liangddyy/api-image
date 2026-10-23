@@ -31,8 +31,8 @@ Routing rule:
    - For purely generic fantasy, mood, simple decoration, or ordinary everyday objects where factual accuracy is not important, search is optional.
    - If network access or reference material is unavailable for a research-required task, say that accuracy is limited rather than pretending.
 4. Read the active provider settings from the user's root files.
-   - Read `auth.json` and use `OPENAI_API_KEY`.
-   - Read `config.toml`, then use `model_provider` and `[model_providers.<name>].base_url`.
+   - Let the bundled script read `config.toml`, select `model_provider`, and use `[model_providers.<name>].base_url` and the credential resolution order below. Do not dump credential files into tool output.
+   - `auth.json` is optional: the active provider can supply credentials through `env_key` or `experimental_bearer_token`.
    - Never hardcode a provider URL or API key into the skill.
    - Default to the root files above. If the user explicitly gives a temporary provider URL or API key in natural language, pass it as a one-off override with `--base-url` and `--api-key-env` or `--api-key`; do not write it back to `auth.json`, `config.toml`, README, logs, or generated files.
    - Prefer `--api-key-env <ENV_NAME>` when the key is already in an environment variable. Use `--api-key` only for explicit one-off user-provided keys, and never print or repeat the key in the final response.
@@ -61,6 +61,26 @@ Default root files:
 - General rule: `$CODEX_HOME/auth.json` and `$CODEX_HOME/config.toml`, otherwise `~/.codex/auth.json` and `~/.codex/config.toml`
 
 This skill must always read the current files at runtime. The provider may differ from machine to machine.
+
+Credential resolution order (first applicable source wins):
+
+1. Explicit `--api-key-env <ENV_NAME>` or `--api-key <key>` (mutually exclusive).
+2. The environment variable named by the active provider's `env_key` in `config.toml`.
+3. The active provider's `experimental_bearer_token` in `config.toml`.
+4. `OPENAI_API_KEY` in `auth.json`, if that file exists.
+5. The `OPENAI_API_KEY` environment variable.
+
+- An explicitly selected environment variable that is empty or unset is an error. Do not silently fall back to a different account's key.
+- The script does not read ChatGPT OAuth tokens, OS keyring entries, or merge project/profile configuration. A working Codex login alone does not establish access to an image API; use a static API key or provider bearer token accepted by that endpoint.
+- UTF-8 files with or without a BOM are supported. Never create `auth.json` just to satisfy this skill when another credential source is available.
+
+For setup or credential failures, check locally without making a billable image request:
+
+```powershell
+python "<skill-dir>\scripts\generate_image.py" --check-config
+```
+
+This requires no prompt, makes no network request, and prints the credential source without the secret. It checks local configuration only, not endpoint/model/account availability. Do not claim successful image generation from this check alone.
 
 Temporary overrides:
 
@@ -143,6 +163,7 @@ Useful options:
 - `--moderation auto|low` for supported GPT image models
 - `--prompt-file <path>` for one prompt per non-empty line
 - `--codex-home <path>`
+- `--check-config` validate local provider/credential configuration only; no prompt or network request
 - `--base-url <https://provider.example/v1>` temporary Provider URL override
 - `--api-key-env <ENV_NAME>` temporary API key override from an environment variable
 - `--api-key <key>` temporary direct API key override, only when explicitly provided
@@ -314,7 +335,7 @@ Follow the current official GPT Image rules for `gpt-image-2`:
 
 ## Failure Rules
 
-- Raise explicit errors when `OPENAI_API_KEY`, `model_provider`, or `base_url` cannot be found.
+- Raise explicit errors when no supported API credential, `model_provider`, or `base_url` can be found. A missing `auth.json` alone is not an error when a provider or environment credential is available.
 - Allow temporary Provider overrides with `--base-url`, `--api-key-env`, or `--api-key`; do not persist them unless explicitly requested.
 - Raise explicit errors when both `--api-key` and `--api-key-env` are provided, when the named environment variable is empty, or when `--base-url` is not an HTTP(S) URL.
 - Raise explicit errors when `size` violates the official GPT Image constraints or `quality` is unsupported.

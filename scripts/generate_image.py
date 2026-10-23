@@ -45,6 +45,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--moderation", help="auto or low for supported GPT image models.")
     parser.add_argument("--codex-home", help="Override Codex root directory.")
+    parser.add_argument(
+        "--check-config",
+        action="store_true",
+        help="Check local provider configuration without a prompt or network request; never print the key.",
+    )
     parser.add_argument("--base-url", help="Temporarily override the configured provider base_url.")
     parser.add_argument(
         "--api-key-env",
@@ -116,6 +121,18 @@ def request_images(args: argparse.Namespace, prompt: str, mode: str, timeout: in
 
 def main() -> int:
     args = parse_args()
+    if args.check_config:
+        provider = load_provider_config(
+            resolve_codex_home(args.codex_home),
+            base_url_override=args.base_url,
+            api_key_override=args.api_key,
+            api_key_env=args.api_key_env,
+        )
+        print("Configuration OK.")
+        print(f"Codex root: {provider.codex_home}")
+        print(f"Credential source: {provider.api_key_source}")
+        print("No request sent. Image endpoint/model availability has not been tested.")
+        return 0
     timeout = validate_timeout(args.timeout)
     mode = determine_mode(args)
     validate_mode(args, mode)
